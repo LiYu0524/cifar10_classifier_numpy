@@ -67,6 +67,137 @@ class SoftmaxWithCrossEntropy:
         dx = (self.y - self.t_one_hot) / self.x_shape[0]
         return dx
 
+class TwoLayerNet:
+    """两层神经网络"""
+    def __init__(self, input_size, hidden_size, output_size, 
+                 activation='relu', weight_init_std=0.01):
+        """
+        初始化网络参数
+        
+        参数:
+        - input_size: 输入大小
+        - hidden_size: 隐藏层大小
+        - output_size: 输出大小
+        - activation: 激活函数类型 ('relu', 'sigmoid', 'tanh')
+        - weight_init_std: 权重初始化标准差
+        """
+        # 初始化权重
+        self.params = {}
+        self.params['W1'] = weight_init_std * np.random.randn(input_size, hidden_size)
+        self.params['b1'] = np.zeros(hidden_size)
+        self.params['W2'] = weight_init_std * np.random.randn(hidden_size, output_size)
+        self.params['b2'] = np.zeros(output_size)
+
+        # 设置激活函数
+        if activation.lower() == 'relu':
+            self.activation = ReLU()
+        elif activation.lower() == 'sigmoid':
+            self.activation = Sigmoid()
+        elif activation.lower() == 'tanh':
+            self.activation = Tanh()
+        else:
+            raise ValueError(f"不支持的激活函数: {activation}")
+        
+        self.loss_function = SoftmaxWithCrossEntropy()
+        
+        # 中间数据
+        self.x = None
+        self.z1 = None
+        self.a1 = None
+        self.z2 = None
+
+    def predict(self, x):
+        """前向传播"""
+        W1, W2 = self.params['W1'], self.params['W2']
+        b1, b2 = self.params['b1'], self.params['b2']
+        
+        z1 = np.dot(x, W1) + b1
+        a1 = self.activation.forward(z1)
+        z2 = np.dot(a1, W2) + b2
+        
+        return z2
+    
+    def loss(self, x, t, reg_lambda=0.0):
+        """计算损失（包括L2正则化）"""
+        z2 = self.predict(x)
+        
+        # 计算交叉熵损失
+        loss = self.loss_function.forward(z2, t)
+        
+        # 添加L2正则化
+        if reg_lambda > 0:
+            W1, W2 = self.params['W1'], self.params['W2']
+            reg_loss = 0.5 * reg_lambda * (np.sum(W1**2) + np.sum(W2**2))
+            loss += reg_loss
+            
+        return loss
+        
+    def accuracy(self, x, t):
+        """计算准确率"""
+        y = self.predict(x)
+        y = np.argmax(y, axis=1)
+        
+        if t.ndim != 1:
+            t = np.argmax(t, axis=1)
+            
+        accuracy = np.sum(y == t) / float(x.shape[0])
+        return accuracy
+        
+    def forward(self, x):
+        """前向传播并存储中间值"""
+        self.x = x
+        W1, W2 = self.params['W1'], self.params['W2']
+        b1, b2 = self.params['b1'], self.params['b2']
+        
+        self.z1 = np.dot(x, W1) + b1
+        self.a1 = self.activation.forward(self.z1)
+        self.z2 = np.dot(self.a1, W2) + b2
+        
+        return self.z2
+        
+    def backward(self, t, reg_lambda=0.0):
+        """反向传播计算梯度"""
+        batch_size = self.x.shape[0]
+        
+        # 计算softmax与交叉熵的梯度
+        dout = self.loss_function.backward()
+        
+        # 输出层到隐藏层
+        dW2 = np.dot(self.a1.T, dout)
+        db2 = np.sum(dout, axis=0)
+        da1 = np.dot(dout, self.params['W2'].T)
+        
+        # 隐藏层激活函数
+        dz1 = self.activation.backward(self.z1, da1)
+        
+        # 隐藏层到输入层
+        dW1 = np.dot(self.x.T, dz1)
+        db1 = np.sum(dz1, axis=0)
+        
+        # 添加L2正则化
+        if reg_lambda > 0:
+            dW1 += reg_lambda * self.params['W1']
+            dW2 += reg_lambda * self.params['W2']
+        
+        # 存储梯度
+        grads = {}
+        grads['W1'] = dW1
+        grads['b1'] = db1
+        grads['W2'] = dW2
+        grads['b2'] = db2
+        
+        return grads
+    
+    def save_params(self, file_path):
+        """保存模型参数"""
+        with open(file_path, 'wb') as f:
+            pickle.dump(self.params, f)
+    
+    def load_params(self, file_path):
+        """加载模型参数"""
+        with open(file_path, 'rb') as f:
+            self.params = pickle.load(f)
+
 class ThreeLayerNet:
     """三层神经网络"""
     def __init__(self, input_size, hidden_size1, hidden_size2, output_size, 

@@ -2,6 +2,7 @@ import numpy as np
 import os
 import time
 import matplotlib.pyplot as plt
+import datetime
 
 class SGD:
     """
@@ -111,6 +112,32 @@ class Trainer:
         - verbose: 是否打印训练过程
         - record_interval: 记录结果的间隔
         """
+        # 创建日志文件
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        log_dir = os.path.join(self.save_dir, 'logs')
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+        log_file = os.path.join(log_dir, f'train_log_{timestamp}.txt')
+        
+        # 记录训练参数
+        with open(log_file, 'w') as f:
+            f.write("训练日志\n")
+            f.write("=" * 50 + "\n")
+            f.write(f"时间戳: {timestamp}\n")
+            f.write(f"模型类型: {self.model.__class__.__name__}\n")
+            if hasattr(self.model, 'params'):
+                for key, value in self.model.params.items():
+                    f.write(f"{key} shape: {value.shape}\n")
+            f.write(f"优化器: {self.optimizer.__class__.__name__}\n")
+            f.write(f"初始学习率: {self.initial_lr}\n")
+            f.write(f"是否使用学习率调度: {self.lr_scheduler is not None}\n")
+            f.write(f"训练轮数: {epochs}\n")
+            f.write(f"批量大小: {batch_size}\n")
+            f.write(f"L2正则化系数: {reg_lambda}\n")
+            f.write(f"训练集大小: {X_train.shape[0]}\n")
+            f.write(f"验证集大小: {X_val.shape[0]}\n")
+            f.write("=" * 50 + "\n\n")
+        
         # 计算batch数量
         train_size = X_train.shape[0]
         iter_per_epoch = max(train_size // batch_size, 1)
@@ -172,6 +199,13 @@ class Trainer:
                 # 计算当前epoch的训练时间
                 epoch_time = time.time() - epoch_start
                 
+                # 记录到日志文件
+                with open(log_file, 'a') as f:
+                    f.write(f"Epoch {epoch}/{epochs}, 时间: {epoch_time:.2f}秒, 学习率: {self.optimizer.lr:.6f}\n")
+                    f.write(f"训练损失: {train_loss:.4f}, 训练准确率: {train_acc:.4f}\n")
+                    f.write(f"验证损失: {val_loss:.4f}, 验证准确率: {val_acc:.4f}\n")
+                    f.write("-" * 50 + "\n")
+                
                 if verbose:
                     print(f"Epoch {epoch}/{epochs}, 时间: {epoch_time:.2f}秒, 学习率: {self.optimizer.lr:.6f}")
                     print(f"训练损失: {train_loss:.4f}, 训练准确率: {train_acc:.4f}")
@@ -183,9 +217,23 @@ class Trainer:
         
         # 计算总训练时间
         total_time = time.time() - start_time
+        
+        # 记录训练结果摘要
+        with open(log_file, 'a') as f:
+            f.write("\n训练结果摘要\n")
+            f.write("=" * 50 + "\n")
+            f.write(f"总训练时间: {total_time:.2f}秒\n")
+            f.write(f"最佳验证准确率: {self.best_val_acc:.4f}\n")
+            f.write(f"最终训练损失: {self.train_loss_list[-1]:.4f}\n")
+            f.write(f"最终验证损失: {self.val_loss_list[-1]:.4f}\n")
+            f.write(f"最终训练准确率: {self.train_acc_list[-1]:.4f}\n")
+            f.write(f"最终验证准确率: {self.val_acc_list[-1]:.4f}\n")
+            f.write("=" * 50 + "\n")
+        
         if verbose:
             print(f"训练完成！总时间: {total_time:.2f}秒")
             print(f"最佳验证准确率: {self.best_val_acc:.4f}")
+            print(f"日志已保存至: {log_file}")
     
     def _update(self, X_batch, y_batch, reg_lambda):
         """
@@ -203,12 +251,27 @@ class Trainer:
         self.model.forward(X_batch)
         
         # 计算损失
-        loss = self.model.loss_function.forward(self.model.z3, y_batch)
+        # 检查模型类型
+        if hasattr(self.model, 'z3'):
+            # 三层网络
+            loss = self.model.loss_function.forward(self.model.z3, y_batch)
+        else:
+            # 两层网络
+            loss = self.model.loss_function.forward(self.model.z2, y_batch)
         
         # L2正则化
         if reg_lambda > 0:
-            W1, W2, W3 = self.model.params['W1'], self.model.params['W2'], self.model.params['W3']
-            reg_loss = 0.5 * reg_lambda * (np.sum(W1**2) + np.sum(W2**2) + np.sum(W3**2))
+            W1 = self.model.params['W1']
+            W2 = self.model.params['W2']
+            
+            # 检查是否为三层网络
+            if 'W3' in self.model.params:
+                W3 = self.model.params['W3']
+                reg_loss = 0.5 * reg_lambda * (np.sum(W1**2) + np.sum(W2**2) + np.sum(W3**2))
+            else:
+                # 两层网络
+                reg_loss = 0.5 * reg_lambda * (np.sum(W1**2) + np.sum(W2**2))
+                
             loss += reg_loss
         
         # 反向传播
@@ -256,8 +319,12 @@ class Trainer:
         plt.legend()
         
         plt.tight_layout()
-        plt.savefig(os.path.join(save_dir, 'training_curves.png'))
+        
+        # 使用时间戳作为文件名一部分
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        plt.savefig(os.path.join(save_dir, f'training_curves_{timestamp}.png'))
         plt.close()
+        print(f"训练曲线已保存至: {os.path.join(save_dir, f'training_curves_{timestamp}.png')}")
     
     def visualize_weights(self, save_dir=None, layer=1, reshape=True):
         """
@@ -282,11 +349,18 @@ class Trainer:
         elif layer == 2:
             weights = self.model.params['W2']
             title = 'Second Layer Weights'
-        elif layer == 3:
+        elif layer == 3 and 'W3' in self.model.params:
             weights = self.model.params['W3']
             title = 'Third Layer Weights'
         else:
-            raise ValueError("Layer index must be 1, 2 or 3")
+            if layer == 3 and 'W3' not in self.model.params:
+                print(f"警告: 第{layer}层权重不存在，仅显示可用层")
+                return
+            else:
+                raise ValueError("Layer index must be 1, 2 or 3")
+        
+        # 使用时间戳作为文件名一部分
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         
         # 对于第一层，可以将权重重新塑形为图像
         if layer == 1 and reshape:
@@ -315,8 +389,9 @@ class Trainer:
             plt.suptitle(f'{title} (Reshaped as Images)', fontsize=16)
             plt.tight_layout()
             plt.subplots_adjust(top=0.95)
-            plt.savefig(os.path.join(save_dir, f'layer{layer}_weights_images.png'))
+            plt.savefig(os.path.join(save_dir, f'layer{layer}_weights_images_{timestamp}.png'))
             plt.close()
+            print(f"权重图像已保存至: {os.path.join(save_dir, f'layer{layer}_weights_images_{timestamp}.png')}")
         
         # 使用热力图可视化权重矩阵
         plt.figure(figsize=(12, 10))
@@ -339,5 +414,6 @@ class Trainer:
             plt.imshow(weights, cmap='viridis')
         
         plt.colorbar()
-        plt.savefig(os.path.join(save_dir, f'layer{layer}_weights_heatmap.png'))
-        plt.close() 
+        plt.savefig(os.path.join(save_dir, f'layer{layer}_weights_heatmap_{timestamp}.png'))
+        plt.close()
+        print(f"权重热力图已保存至: {os.path.join(save_dir, f'layer{layer}_weights_heatmap_{timestamp}.png')}") 

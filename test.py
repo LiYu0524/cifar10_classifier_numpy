@@ -2,12 +2,12 @@ import numpy as np
 import os
 import argparse
 import matplotlib.pyplot as plt
-from model import ThreeLayerNet
+from model import ThreeLayerNet, TwoLayerNet
 from data import load_cifar10
 
 def test_model(model_path, dataset_dir='./cifar10/dataset', 
-               input_size=3072, hidden_size1=100, hidden_size2=100, 
-               output_size=10, activation='relu'):
+               input_size=3072, hidden_size=100, hidden_size2=None, 
+               output_size=10, activation='relu', model_type='three'):
     """
     测试模型在测试集上的性能
     
@@ -15,10 +15,11 @@ def test_model(model_path, dataset_dir='./cifar10/dataset',
     - model_path: 模型参数文件路径
     - dataset_dir: 数据集目录
     - input_size: 输入大小
-    - hidden_size1: 第一隐藏层大小
-    - hidden_size2: 第二隐藏层大小
+    - hidden_size: 隐藏层大小 (如果是两层网络) 或第一隐藏层大小 (如果是三层网络)
+    - hidden_size2: 第二隐藏层大小 (仅用于三层网络)
     - output_size: 输出大小
     - activation: 激活函数类型
+    - model_type: 模型类型 ('two' 或 'three')
     
     返回:
     - 测试准确率
@@ -28,14 +29,25 @@ def test_model(model_path, dataset_dir='./cifar10/dataset',
     _, (X_test, y_test) = load_cifar10(dataset_dir, normalize=True, flatten=True, one_hot=False)
     
     # 创建模型
-    print(f"创建模型 (hidden_size1={hidden_size1}, hidden_size2={hidden_size2}, activation={activation})...")
-    model = ThreeLayerNet(
-        input_size=input_size,
-        hidden_size1=hidden_size1,
-        hidden_size2=hidden_size2,
-        output_size=output_size,
-        activation=activation
-    )
+    if model_type == 'two':
+        print(f"创建两层神经网络 (hidden_size={hidden_size}, activation={activation})...")
+        model = TwoLayerNet(
+            input_size=input_size,
+            hidden_size=hidden_size,
+            output_size=output_size,
+            activation=activation
+        )
+    else:  # 默认为三层网络
+        if hidden_size2 is None:
+            hidden_size2 = hidden_size  # 如果未指定，默认与第一层相同
+        print(f"创建三层神经网络 (hidden_size1={hidden_size}, hidden_size2={hidden_size2}, activation={activation})...")
+        model = ThreeLayerNet(
+            input_size=input_size,
+            hidden_size1=hidden_size,
+            hidden_size2=hidden_size2,
+            output_size=output_size,
+            activation=activation
+        )
     
     # 加载模型参数
     print(f"从 {model_path} 加载模型参数...")
@@ -48,6 +60,9 @@ def test_model(model_path, dataset_dir='./cifar10/dataset',
     
     # 可视化随机样本的预测
     visualize_predictions(model, X_test, y_test)
+    
+    # 计算并可视化混淆矩阵
+    confusion_matrix(model, X_test, y_test)
     
     return test_acc
 
@@ -150,10 +165,10 @@ if __name__ == "__main__":
                         help='模型参数文件路径')
     parser.add_argument('--dataset_dir', type=str, default='./cifar10/dataset',
                         help='数据集目录')
-    parser.add_argument('--hidden_size1', type=int, default=100,
-                        help='第一隐藏层大小')
-    parser.add_argument('--hidden_size2', type=int, default=100,
-                        help='第二隐藏层大小')
+    parser.add_argument('--hidden_size', type=int, default=100,
+                        help='隐藏层大小')
+    parser.add_argument('--model_type', type=str, default='two',
+                        help='模型类型 (two 或 three)')
     parser.add_argument('--activation', type=str, default='relu',
                         help='激活函数类型 (relu, sigmoid, tanh)')
     
@@ -162,22 +177,15 @@ if __name__ == "__main__":
     # 加载测试数据
     _, (X_test, y_test) = load_cifar10(args.dataset_dir, normalize=True, flatten=True, one_hot=False)
     
-    # 创建模型
-    model = ThreeLayerNet(
+    # 测试模型
+    test_acc = test_model(
+        model_path=args.model_path,
+        dataset_dir=args.dataset_dir,
         input_size=X_test.shape[1],
-        hidden_size1=args.hidden_size1,
-        hidden_size2=args.hidden_size2,
+        hidden_size=args.hidden_size,
         output_size=10,
-        activation=args.activation
+        activation=args.activation,
+        model_type=args.model_type
     )
     
-    # 加载模型参数并测试
-    model.load_params(args.model_path)
-    test_acc = model.accuracy(X_test, y_test)
-    print(f"测试集准确率: {test_acc:.4f}")
-    
-    # 可视化一些预测结果
-    visualize_predictions(model, X_test, y_test)
-    
-    # 计算并可视化混淆矩阵
-    confusion_matrix(model, X_test, y_test) 
+    print(f"测试集准确率: {test_acc:.4f}") 
