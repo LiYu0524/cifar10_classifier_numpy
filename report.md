@@ -43,13 +43,15 @@ CIFAR-10是一个包含10个类别的彩色图像数据集，每个类别包含6
 
 第一层权重可视化（重新塑形为图像）：
 
-![第一层权重](.\results_1\cifar10\results\layer1_weights_images.png)
+![第一层权重](assets/layer1_weights_images_20250413_231633.png)
 
 ### 2.4 测试结果
 
 在测试集上的分类准确率：
 
-![混淆矩阵](.\results_1\cifar10\results\confusion_matrix.png)
+![混淆矩阵](assets/confusion_matrix.png)
+
+![测试集展示](cifar10\results\test_predictions.png)
 
 最优结果在
 
